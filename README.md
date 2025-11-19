@@ -60,12 +60,26 @@ Valid options: `--runs 1`, `--runs 2`, or `--runs 3`
 
 ### Test a Specific Pool
 
-Test a single pool server:
+Test a single pool server by providing the hostname and port as arguments:
 
 ```bash
-python stratum_test.py solo.atlaspool.io 3333
-python stratum_test.py solo.atlaspool.io 3333 --runs 2
+python stratum_test.py <hostname> <port>
 ```
+
+**Examples:**
+
+```bash
+# Test AtlasPool (note: use solo.atlaspool.io, not atlaspool.io)
+python stratum_test.py solo.atlaspool.io 3333
+
+# Test CKPool
+python stratum_test.py solo.ckpool.org 3333
+
+# Test with multiple runs for better accuracy
+python stratum_test.py solo.atlaspool.io 3333 --runs 3
+```
+
+**Important:** Both hostname and port must be provided. The script will show an error if only one is specified.
 
 ### JSON Output
 
