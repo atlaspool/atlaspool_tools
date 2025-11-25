@@ -22,6 +22,9 @@ Supported Address Types:
   • P2TR (Taproot):     bc1p5cyxnuxmeuwuvkwfem96lqzszd02n6xdcjrs20cac6yqjjwudpxqkedrcr
 
 Usage:
+    # Test pool connectivity (uses random address)
+    python3 verify_pool.py <pool_host> <pool_port>
+    
     # Verify a specific address
     python3 verify_pool.py <pool_host> <pool_port> <your_btc_address>
     
@@ -29,9 +32,10 @@ Usage:
     python3 verify_pool.py <pool_host> <pool_port> -a
 
 Examples:
+    python3 verify_pool.py solo.atlaspool.io 3333
     python3 verify_pool.py solo.atlaspool.io 3333 bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh
     python3 verify_pool.py solo.ckpool.org 3333 1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa
-    python3 verify_pool.py solo.atlaspool.io 3333 -a
+    python3 verify_pool.py btc.zsolo.bid 6057 -a
 
 What You'll See:
     • Block height being mined
@@ -962,6 +966,35 @@ def validate_bitcoin_address(address: str) -> Tuple[bool, str]:
         return False, f"Unrecognized address format (should start with 1, 3, or bc1)"
 
 
+def generate_random_p2wpkh_address() -> str:
+    """
+    Generate a random P2WPKH (SegWit) address for testing.
+    Returns a valid bc1q... address.
+    """
+    import hashlib
+    import os
+    
+    # Generate random 20 bytes for the witness program
+    random_bytes = os.urandom(20)
+    
+    # Encode as bech32
+    hrp = 'bc'
+    witver = 0
+    
+    # Convert to 5-bit groups
+    data = [witver] + convertbits(random_bytes, 8, 5)
+    
+    # Create checksum
+    checksum = bech32_create_checksum(hrp, data, 'bech32')
+    
+    # Encode
+    charset = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
+    combined = data + checksum
+    address = hrp + '1' + ''.join([charset[d] for d in combined])
+    
+    return address
+
+
 def test_all_address_types(host: str, port: int, timeout: int, password: str) -> int:
     """
     Test all 5 Bitcoin address types to see which are supported by the pool.
@@ -1134,10 +1167,14 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  Verify AtlasPool with bech32 address (bc1q...):
+  Test pool connectivity (uses random address):
+    python3 verify_pool.py solo.atlaspool.io 3333
+    python3 verify_pool.py btc.zsolo.bid 6057
+  
+  Verify AtlasPool with your bech32 address (bc1q...):
     python3 verify_pool.py solo.atlaspool.io 3333 bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh
   
-  Verify CKPool with legacy address (1...):
+  Verify CKPool with your legacy address (1...):
     python3 verify_pool.py solo.ckpool.org 3333 1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa
   
   Test which address types a pool supports:
@@ -1158,7 +1195,8 @@ Note: This tool performs a basic verification. For complete security, you should
     
     parser.add_argument('host', help='Pool hostname (e.g., solo.atlaspool.io)')
     parser.add_argument('port', type=int, help='Pool port (e.g., 3333)')
-    parser.add_argument('address', nargs='?', help='Your Bitcoin address')
+    parser.add_argument('address', nargs='?', default=None, 
+                        help='Your Bitcoin address (optional - generates random P2WPKH if omitted)')
     parser.add_argument('-a', '--all-types', action='store_true', 
                         help='Test all 5 address types to see which are supported by the pool')
     parser.add_argument('--username', help='Username (defaults to your address)')
@@ -1172,14 +1210,21 @@ Note: This tool performs a basic verification. For complete security, you should
         print("Error: Cannot use both --all-types and specify an address", file=sys.stderr)
         sys.exit(1)
     
-    if not args.all_types and not args.address:
-        print("Error: Must provide either an address or use --all-types", file=sys.stderr)
-        parser.print_help()
-        sys.exit(1)
-    
     # Handle --all-types mode
     if args.all_types:
         return test_all_address_types(args.host, args.port, args.timeout, args.password)
+    
+    # Generate random address if none provided
+    if not args.address:
+        args.address = generate_random_p2wpkh_address()
+        print("=" * 70)
+        print("No address provided - using random P2WPKH address for testing")
+        print("=" * 70)
+        print(f"Generated address: {args.address}")
+        print()
+        print("Note: This is for testing pool connectivity and coinbase parsing.")
+        print("      Use your actual address to verify it will receive payouts.")
+        print()
     
     # Validate the Bitcoin address
     is_valid, error_msg = validate_bitcoin_address(args.address)
