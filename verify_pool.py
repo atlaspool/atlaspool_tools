@@ -35,7 +35,7 @@ Examples:
     python3 verify_pool.py solo.atlaspool.io 3333
     python3 verify_pool.py solo.atlaspool.io 3333 bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh
     python3 verify_pool.py solo.ckpool.org 3333 1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa
-    python3 verify_pool.py btc.zsolo.bid 6057 -a
+    python3 verify_pool.py solo.ckpool.org 3333 -a
 
 What You'll See:
     • Block height being mined
@@ -1217,7 +1217,7 @@ def main():
 Examples:
   Test pool connectivity (uses random address):
     python3 verify_pool.py solo.atlaspool.io 3333
-    python3 verify_pool.py btc.zsolo.bid 6057
+    python3 verify_pool.py solo.ckpool.org 3333
   
   Verify AtlasPool with your bech32 address (bc1q...):
     python3 verify_pool.py solo.atlaspool.io 3333 bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh
