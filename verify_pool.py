@@ -1100,8 +1100,8 @@ def test_all_address_types(host: str, port: int, timeout: int, password: str) ->
             print(f"  ✅ Supported and verified in coinbase")
             results.append((addr_name, addr_format, "Supported ✓", details))
         else:
-            print(f"  ⚠️  Authorized but address not in coinbase")
-            results.append((addr_name, addr_format, "Authorized (Not in Coinbase)", None))
+            print(f"  ❌ Address NOT found in coinbase")
+            results.append((addr_name, addr_format, "Not Found X", outputs))
         
         print()
     
@@ -1117,12 +1117,12 @@ def test_all_address_types(host: str, port: int, timeout: int, password: str) ->
         # Convert status to symbol
         if "Supported ✓" in status:
             symbol = "✓"
+        elif "Not Found X" in status:
+            symbol = "X"
         elif "Unknown ?" in status:
             symbol = "?"
         elif "Connection Failed" in status:
             symbol = "ERR"
-        elif "Not Supported" in status:
-            symbol = "X"
         else:
             symbol = "?"
         
@@ -1131,16 +1131,56 @@ def test_all_address_types(host: str, port: int, timeout: int, password: str) ->
     print()
     print("Legend:")
     print("  ✓   = Supported and verified in coinbase")
+    print("  X   = Address NOT found in coinbase (WARNING: may not be legitimate!)")
     print("  ?   = Unknown (may require valid mining credentials)")
-    print("  X   = Not supported (pool rejected address type)")
     print("  ERR = Connection error")
     print()
     
     # Count supported types
     supported_count = sum(1 for _, _, status, _ in results if "Supported ✓" in status)
+    not_found_count = sum(1 for _, _, status, _ in results if "Not Found X" in status)
     unknown_count = sum(1 for _, _, status, _ in results if "Unknown ?" in status)
     
-    if supported_count == 0 and unknown_count == 0:
+    # Show warnings for addresses not found in coinbase
+    if not_found_count > 0:
+        print("=" * 70)
+        print("⚠️  WARNING: ADDRESS NOT FOUND IN COINBASE")
+        print("=" * 70)
+        print()
+        print(f"{not_found_count} address type(s) were authorized but NOT found in the coinbase outputs.")
+        print()
+        print("This means:")
+        print("  • The pool accepted your address for mining")
+        print("  • BUT the block reward is NOT going to your address")
+        print("  • The pool may be paying to their own address instead")
+        print()
+        print("⚠️  WARNING: This pool may not be legitimate solo mining!")
+        print()
+        print("Possible reasons:")
+        print("  1. The pool is paying to their own address (not solo mining)")
+        print("  2. The pool uses a different payout mechanism")
+        print("  3. The test addresses don't match the pool's expected format")
+        print()
+        print("⚠️  Do NOT mine on this pool until you verify it's legitimate!")
+        print("   Try testing with YOUR actual mining address to confirm.")
+        print()
+        print("Addresses NOT found in coinbase:")
+        for addr_name, addr_format, status, outputs in results:
+            if "Not Found X" in status:
+                print(f"  • {addr_name} ({addr_format})")
+                if outputs:
+                    print(f"    Coinbase is paying to:")
+                    for i, output in enumerate(outputs, 1):
+                        if output['value_satoshis'] > 0:
+                            addr = hash_to_address(output['address_data'], output['address_type'])
+                            if addr and len(addr) > 40:
+                                addr = addr[:20] + "..." + addr[-17:]
+                            print(f"      Output #{i}: {output['address_type']} → {addr or output['address_type']}")
+        print()
+        print("=" * 70)
+        print()
+    
+    if supported_count == 0 and unknown_count == 0 and not_found_count == 0:
         print("⚠️  WARNING: No address types were verified!")
         print("   This pool may not support solo mining or has connection issues.")
         return 1
@@ -1149,15 +1189,23 @@ def test_all_address_types(host: str, port: int, timeout: int, password: str) ->
         print("   This pool may require valid mining credentials to test.")
         print("   Try testing with your actual mining address and credentials.")
         return 2
+    elif supported_count == 0 and not_found_count > 0:
+        print(f"⚠️  CRITICAL: {not_found_count} address type(s) NOT found in coinbase!")
+        print("   This pool is likely NOT legitimate solo mining.")
+        return 1
     elif supported_count < 3:
         print(f"✓ Pool supports {supported_count} address type(s).")
         if unknown_count > 0:
             print(f"  ({unknown_count} type(s) could not be verified)")
+        if not_found_count > 0:
+            print(f"  ⚠️  {not_found_count} type(s) NOT found in coinbase")
         return 0
     else:
         print(f"✓ Pool supports {supported_count} address type(s).")
         if unknown_count > 0:
             print(f"  ({unknown_count} type(s) could not be verified)")
+        if not_found_count > 0:
+            print(f"  ⚠️  {not_found_count} type(s) NOT found in coinbase")
         return 0
 
 
