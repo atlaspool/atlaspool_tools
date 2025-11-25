@@ -373,7 +373,7 @@ For issues or questions:
 - Option to continue without ping or exit to install it first
 
 **Thanks:**
-- Special thanks to an anonymous user from r/BitAxe who reported the issue on Android and helped test the fix!
+- Special thanks to Reddit user alex262414 from r/BitAxe who reported the issue on Android and helped test the fix!
 
 ### Version 1.1 - November 2025
 

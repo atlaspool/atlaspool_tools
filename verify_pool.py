@@ -6,7 +6,15 @@ Connects to a stratum pool as a worker and verifies that the block template
 contains your Bitcoin address in the coinbase transaction. This helps ensure
 the pool is actually solo mining (paying you directly) rather than pool mining.
 
-The tool can verify a specific address or test all 5 Bitcoin address types:
+Features:
+  • Verifies your address appears in coinbase outputs
+  • Shows block height and pool signature from coinbase script
+  • Displays all coinbase outputs with full Bitcoin addresses
+  • Shows payout percentages for each output (miner vs pool fee)
+  • Decodes OP_RETURN witness commitments
+  • Tests all 5 Bitcoin address types for compatibility
+
+Supported Address Types:
   • P2PKH (Legacy):     1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa
   • P2SH (Script Hash): 3EExK1K1TF3v7zsFtQHt14XqexCwgmXM1y
   • P2WPKH (SegWit):    bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh
@@ -25,7 +33,15 @@ Examples:
     python3 verify_pool.py solo.ckpool.org 3333 1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa
     python3 verify_pool.py solo.atlaspool.io 3333 -a
 
-Version: 1.0
+What You'll See:
+    • Block height being mined
+    • Pool signature (e.g., "ckpool", "/solo.ckpool.org/")
+    • All coinbase outputs with amounts, types, hashes, and full addresses
+    • Payout breakdown showing percentage split (e.g., 98% miner, 2% pool fee)
+    • OP_RETURN witness commitment (SegWit metadata, 0 BTC)
+    • Verification result: ✅ Found, ⚠️ Unknown, or ❌ Not Found
+
+Version: 1.1
 """
 
 import socket
@@ -208,6 +224,145 @@ def wait_for_mining_notify(sock: socket.socket, timeout: int = 15) -> Optional[d
         return None
 
 
+def parse_coinbase_script(coinb1_hex: str) -> dict:
+    """
+    Parse the coinbase script (coinb1) to extract block height and pool signature.
+    
+    Coinbase script structure (coinb1 is partial, ends before extranonce):
+    - Version (4 bytes)
+    - Input count (1 byte, always 0x01)
+    - Previous output hash (32 bytes, all zeros)
+    - Previous output index (4 bytes, all 0xff)
+    - Script length (varint)
+    - Script data (partial):
+      - Block height (BIP34, variable length)
+      - Arbitrary data (pool signature, etc.)
+      - [extranonce placeholder - not in coinb1]
+    
+    Returns dict with block_height, pool_signature, and raw script data.
+    """
+    try:
+        coinb1_bytes = binascii.unhexlify(coinb1_hex)
+        
+        # Skip version (4 bytes) + input count (1 byte) + prev hash (32 bytes) + prev index (4 bytes)
+        pos = 4 + 1 + 32 + 4  # = 41 bytes
+        
+        if pos >= len(coinb1_bytes):
+            return {'error': f'Coinbase too short ({len(coinb1_bytes)} bytes, need at least {pos})'}
+        
+        # Read script length (varint - simplified for < 253)
+        script_len = coinb1_bytes[pos]
+        pos += 1
+        
+        # Note: coinb1 is partial, so we just read what's available
+        # The script continues in coinb2 after the extranonce
+        available_script = coinb1_bytes[pos:]
+        
+        # Parse block height (BIP34)
+        # First byte indicates the length of the height value
+        if len(available_script) == 0:
+            return {
+                'block_height': None,
+                'pool_signature': '',
+                'pool_signature_ascii': '',
+                'script_hex': '',
+                'script_ascii': '',
+                'script_length': script_len
+            }
+        
+        height_len = available_script[0]
+        
+        # Height length should be 1-4 bytes typically
+        if height_len > 0 and height_len <= 4 and len(available_script) > height_len:
+            # Extract height (little-endian)
+            height_bytes = available_script[1:1 + height_len]
+            block_height = int.from_bytes(height_bytes, 'little')
+            
+            # Everything after height is arbitrary data (pool signature)
+            arbitrary_data = available_script[1 + height_len:]
+        else:
+            # Can't parse height, treat all as arbitrary
+            block_height = None
+            arbitrary_data = available_script
+        
+        # Try to decode arbitrary data as ASCII
+        ascii_text = ''
+        try:
+            ascii_text = ''.join(chr(b) if 32 <= b < 127 else '.' for b in arbitrary_data)
+        except:
+            pass
+        
+        # Full script ASCII (including height bytes)
+        full_ascii = ''.join(chr(b) if 32 <= b < 127 else '.' for b in available_script)
+        
+        return {
+            'block_height': block_height,
+            'pool_signature': arbitrary_data.hex(),
+            'pool_signature_ascii': ascii_text,
+            'script_hex': available_script.hex(),
+            'script_ascii': full_ascii,
+            'script_length': script_len
+        }
+        
+    except Exception as e:
+        return {'error': str(e)}
+
+
+def parse_coinbase_script_suffix(coinb2_hex: str) -> dict:
+    """
+    Parse the suffix of the coinbase script from coinb2.
+    
+    Coinb2 structure:
+    - [Continuation of coinbase script - pool signature, etc.]
+    - Sequence (4 bytes, 0xffffffff)
+    - Output count (varint)
+    - Outputs...
+    
+    The pool signature (like "ckpool") is typically at the beginning of coinb2.
+    """
+    try:
+        coinb2_bytes = binascii.unhexlify(coinb2_hex)
+        
+        # Find the sequence marker (0xffffffff) which marks end of script
+        sequence_pos = -1
+        for i in range(len(coinb2_bytes) - 3):
+            if coinb2_bytes[i:i+4] == b'\xff\xff\xff\xff':
+                sequence_pos = i
+                break
+        
+        if sequence_pos == -1:
+            return {'error': 'Could not find sequence marker'}
+        
+        # Everything before sequence is the script suffix
+        script_suffix = coinb2_bytes[:sequence_pos]
+        
+        # Try to decode as ASCII
+        ascii_text = ''.join(chr(b) if 32 <= b < 127 else '.' for b in script_suffix)
+        
+        # Extract readable strings (3+ consecutive printable chars)
+        readable_strings = []
+        current_string = ''
+        for b in script_suffix:
+            if 32 <= b < 127:
+                current_string += chr(b)
+            else:
+                if len(current_string) >= 3:
+                    readable_strings.append(current_string)
+                current_string = ''
+        if len(current_string) >= 3:
+            readable_strings.append(current_string)
+        
+        return {
+            'script_suffix_hex': script_suffix.hex(),
+            'script_suffix_ascii': ascii_text,
+            'readable_strings': readable_strings,
+            'length': len(script_suffix)
+        }
+        
+    except Exception as e:
+        return {'error': str(e)}
+
+
 def parse_coinbase_outputs(coinb2_hex: str) -> list:
     """
     Parse the outputs from coinbase transaction (coinb2).
@@ -315,13 +470,146 @@ def decode_script(script: bytes) -> tuple:
     return "unknown", script.hex()
 
 
-def witness_program_to_address(witness_program_hex: str, version: int = 0) -> str:
+def bech32_polymod(values):
+    """Compute the Bech32 checksum polymod."""
+    GEN = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3]
+    chk = 1
+    for value in values:
+        b = chk >> 25
+        chk = (chk & 0x1ffffff) << 5 ^ value
+        for i in range(5):
+            chk ^= GEN[i] if ((b >> i) & 1) else 0
+    return chk
+
+
+def bech32_hrp_expand(hrp):
+    """Expand the HRP for Bech32 checksum."""
+    return [ord(x) >> 5 for x in hrp] + [0] + [ord(x) & 31 for x in hrp]
+
+
+def bech32_create_checksum(hrp, data, spec):
+    """Create Bech32/Bech32m checksum."""
+    values = bech32_hrp_expand(hrp) + data
+    const = 0x2bc830a3 if spec == 'bech32m' else 1
+    polymod = bech32_polymod(values + [0, 0, 0, 0, 0, 0]) ^ const
+    return [(polymod >> 5 * (5 - i)) & 31 for i in range(6)]
+
+
+def bech32_encode(hrp, witver, witprog, spec='bech32'):
+    """Encode a segwit address (bech32 or bech32m)."""
+    charset = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
+    
+    # Convert 8-bit to 5-bit
+    data = [witver] + convertbits(witprog, 8, 5)
+    if data is None:
+        return None
+    
+    # Create checksum
+    checksum = bech32_create_checksum(hrp, data, spec)
+    
+    # Combine and encode
+    combined = data + checksum
+    return hrp + '1' + ''.join([charset[d] for d in combined])
+
+
+def convertbits(data, frombits, tobits, pad=True):
+    """Convert between bit groups."""
+    acc = 0
+    bits = 0
+    ret = []
+    maxv = (1 << tobits) - 1
+    max_acc = (1 << (frombits + tobits - 1)) - 1
+    for value in data:
+        if value < 0 or (value >> frombits):
+            return None
+        acc = ((acc << frombits) | value) & max_acc
+        bits += frombits
+        while bits >= tobits:
+            bits -= tobits
+            ret.append((acc >> bits) & maxv)
+    if pad:
+        if bits:
+            ret.append((acc << (tobits - bits)) & maxv)
+    elif bits >= frombits or ((acc << (tobits - bits)) & maxv):
+        return None
+    return ret
+
+
+def hash_to_address(hash_hex: str, addr_type: str) -> str:
     """
-    Convert witness program to bech32 address.
-    Simplified - doesn't do full bech32 encoding.
+    Convert a hash to a readable Bitcoin address.
+    Returns the address or the hash if encoding fails.
     """
-    # For comparison purposes, just return the hex
-    return witness_program_hex
+    try:
+        import hashlib
+        
+        if addr_type == "P2PKH":
+            # Encode as legacy address (1...)
+            version = bytes([0])
+            hash_bytes = bytes.fromhex(hash_hex)
+            data = version + hash_bytes
+            checksum = hashlib.sha256(hashlib.sha256(data).digest()).digest()[:4]
+            
+            # Base58 encode
+            alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
+            num = int.from_bytes(data + checksum, 'big')
+            encoded = ''
+            while num > 0:
+                num, remainder = divmod(num, 58)
+                encoded = alphabet[remainder] + encoded
+            
+            # Add leading 1s for leading zeros
+            for byte in data + checksum:
+                if byte == 0:
+                    encoded = '1' + encoded
+                else:
+                    break
+            
+            return encoded
+            
+        elif addr_type == "P2SH":
+            # Encode as P2SH address (3...)
+            version = bytes([5])
+            hash_bytes = bytes.fromhex(hash_hex)
+            data = version + hash_bytes
+            checksum = hashlib.sha256(hashlib.sha256(data).digest()).digest()[:4]
+            
+            # Base58 encode
+            alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
+            num = int.from_bytes(data + checksum, 'big')
+            encoded = ''
+            while num > 0:
+                num, remainder = divmod(num, 58)
+                encoded = alphabet[remainder] + encoded
+            
+            for byte in data + checksum:
+                if byte == 0:
+                    encoded = '1' + encoded
+                else:
+                    break
+            
+            return encoded
+            
+        elif addr_type == "P2WPKH":
+            # Encode as bech32 (bc1q...) - witness v0, 20 bytes
+            hash_bytes = bytes.fromhex(hash_hex)
+            return bech32_encode('bc', 0, hash_bytes, 'bech32')
+            
+        elif addr_type == "P2WSH":
+            # Encode as bech32 (bc1q...) - witness v0, 32 bytes
+            hash_bytes = bytes.fromhex(hash_hex)
+            return bech32_encode('bc', 0, hash_bytes, 'bech32')
+            
+        elif addr_type == "P2TR":
+            # Encode as bech32m (bc1p...) - witness v1, 32 bytes
+            hash_bytes = bytes.fromhex(hash_hex)
+            return bech32_encode('bc', 1, hash_bytes, 'bech32m')
+            
+        else:
+            return hash_hex
+            
+    except:
+        return hash_hex
 
 
 def base58_decode(address: str) -> Optional[str]:
@@ -860,8 +1148,37 @@ Note: This tool performs a basic verification. For complete security, you should
     print(f"    Coinbase part 1 length: {len(coinb1)} chars")
     print(f"    Coinbase part 2 length: {len(coinb2)} chars")
     
-    # Step 4: Parse and verify coinbase outputs
-    print("\n[4/4] Parsing coinbase transaction outputs...")
+    # Parse coinbase script for block height and pool signature
+    print("\n[4/5] Parsing coinbase script (block height & pool signature)...")
+    
+    # Parse coinb1 (beginning of script)
+    script_info = parse_coinbase_script(coinb1)
+    
+    if 'error' in script_info:
+        print(f"    ⚠️  Could not parse coinbase script prefix: {script_info['error']}")
+    else:
+        if script_info['block_height'] is not None:
+            print(f"    Block height: {script_info['block_height']:,}")
+    
+    # Parse coinb2 (end of script - where pool signature usually is)
+    script_suffix = parse_coinbase_script_suffix(coinb2)
+    
+    if 'error' not in script_suffix:
+        if script_suffix['readable_strings']:
+            print(f"    Pool signature: {', '.join(script_suffix['readable_strings'])}")
+        
+        # Show full script suffix if it has readable content
+        if script_suffix['script_suffix_ascii'].strip('.'):
+            ascii_text = script_suffix['script_suffix_ascii']
+            # Only show if there's meaningful content
+            readable_portion = ''.join(c for c in ascii_text if c.isprintable() and c not in '.')
+            if len(readable_portion) >= 3:
+                print(f"    Script suffix (ASCII): {ascii_text[:80]}")
+                if len(ascii_text) > 80:
+                    print(f"                           {ascii_text[80:160]}")
+    
+    # Step 5: Parse and verify coinbase outputs
+    print("\n[5/5] Parsing coinbase transaction outputs...")
     
     # Parse the outputs from coinb2
     outputs = parse_coinbase_outputs(coinb2)
@@ -875,12 +1192,62 @@ Note: This tool performs a basic verification. For complete security, you should
     print(f"    Found {len(outputs)} output(s) in coinbase:")
     print()
     
+    # Calculate total value (excluding OP_RETURN which has 0 value)
+    total_value = sum(o['value_satoshis'] for o in outputs)
+    
     for i, output in enumerate(outputs, 1):
         print(f"    Output #{i}:")
-        print(f"      Amount: {output['value_btc']:.8f} BTC ({output['value_satoshis']:,} sats)")
-        print(f"      Type:   {output['address_type']}")
-        if output['address_type'] != 'OP_RETURN':
-            print(f"      Data:   {output['address_data']}")
+        
+        # Show amount with percentage
+        value_btc = output['value_btc']
+        value_sats = output['value_satoshis']
+        
+        if total_value > 0 and value_sats > 0:
+            percentage = (value_sats / total_value) * 100
+            print(f"      Amount:  {value_btc:.8f} BTC ({value_sats:,} sats) - {percentage:.2f}%")
+        else:
+            print(f"      Amount:  {value_btc:.8f} BTC ({value_sats:,} sats)")
+        
+        print(f"      Type:    {output['address_type']}")
+        
+        if output['address_type'] == 'OP_RETURN':
+            # Show OP_RETURN data (usually witness commitment or pool metadata)
+            data_hex = output['address_data']
+            print(f"      Purpose: Witness commitment (SegWit) or pool metadata")
+            print(f"      Data:    {data_hex[:60]}{'...' if len(data_hex) > 60 else ''}")
+            # Try to decode as ASCII
+            try:
+                data_bytes = bytes.fromhex(data_hex)
+                ascii_text = ''.join(chr(b) if 32 <= b < 127 else '.' for b in data_bytes)
+                if ascii_text.strip('.'):
+                    print(f"      ASCII:   {ascii_text[:60]}")
+            except:
+                pass
+        elif output['address_type'] != 'unknown':
+            # Show both hash and readable address
+            print(f"      Hash:    {output['address_data']}")
+            address = hash_to_address(output['address_data'], output['address_type'])
+            if address and address != output['address_data']:
+                print(f"      Address: {address}")
+        else:
+            # Unknown script type - show raw hex
+            print(f"      Script:  {output['address_data'][:60]}{'...' if len(output['address_data']) > 60 else ''}")
+        
+        print()
+    
+    # Show summary if multiple paying outputs
+    paying_outputs = [o for o in outputs if o['value_satoshis'] > 0]
+    if len(paying_outputs) > 1:
+        print("    " + "=" * 66)
+        print("    PAYOUT BREAKDOWN:")
+        for i, output in enumerate(outputs, 1):
+            if output['value_satoshis'] > 0:
+                percentage = (output['value_satoshis'] / total_value) * 100
+                addr = hash_to_address(output['address_data'], output['address_type'])
+                if addr and len(addr) > 40:
+                    addr = addr[:20] + "..." + addr[-17:]
+                print(f"      Output #{i}: {percentage:5.2f}% → {addr or output['address_type']}")
+        print("    " + "=" * 66)
         print()
     
     # Verify if user's address is in the outputs
