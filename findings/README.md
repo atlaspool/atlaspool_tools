@@ -24,9 +24,20 @@ By monitoring 16 Bitcoin mining pools simultaneously over 11 minutes, we discove
 
 - Python 3.6 or higher
 - A valid Bitcoin address (for testing legitimate pools)
-- A file named `pools.txt` in the parent directory with pool list
+- A file named `pools.txt` with pool list
 
-### Pool List Format
+### Pool List Setup
+
+**Option 1: Use the included pools.txt file (recommended)**
+
+A `pools.txt` file is included in this directory with 16 pools (3 scam, 13 legitimate). You can use it as-is:
+
+```bash
+# The pools.txt file is already in the findings directory
+python3 prevhash_timeline.py YOUR_BITCOIN_ADDRESS pools.txt
+```
+
+**Option 2: Create your own pools.txt file**
 
 Create a `pools.txt` file with one pool per line:
 
@@ -43,16 +54,16 @@ btc.luckymonster.pro 7112
 
 ### Running the Script
 
-**Basic usage (11 minutes, 22 snapshots):**
+**Basic usage (11 minutes, 22 snapshots with included pools.txt):**
 
 ```bash
-python3 prevhash_timeline.py YOUR_BITCOIN_ADDRESS
+python3 prevhash_timeline.py YOUR_BITCOIN_ADDRESS pools.txt
 ```
 
 **Example:**
 
 ```bash
-python3 prevhash_timeline.py 3Ax2uht6S5Lh6V5HLNhxfaHnEZU7KaFvSZ
+python3 prevhash_timeline.py 3Ax2uht6S5Lh6V5HLNhxfaHnEZU7KaFvSZ pools.txt
 ```
 
 **Custom duration:**

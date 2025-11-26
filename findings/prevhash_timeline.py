@@ -208,20 +208,27 @@ def display_timeline_table(timeline: List[Dict], pools: List[Tuple[str, int, str
     """
     Display timeline as a table
     """
-    # Order pools: scam pools first, then legitimate
+    # Order pools: scam pools first, then legitimate (with atlaspool.io first)
     scam_keywords = ['luckymonster', 'zsolo']
     
     scam_pools = []
-    legit_pools = []
+    atlaspool = None
+    other_legit_pools = []
     
     for host, port, name in pools:
         is_scam = any(keyword in name.lower() for keyword in scam_keywords)
         if is_scam:
             scam_pools.append(name)
+        elif 'atlaspool.io' in name.lower():
+            atlaspool = name
         else:
-            legit_pools.append(name)
+            other_legit_pools.append(name)
     
-    ordered_pools = sorted(scam_pools) + sorted(legit_pools)
+    # Order: scam pools (sorted), then atlaspool, then other legitimate pools (sorted)
+    ordered_pools = sorted(scam_pools)
+    if atlaspool:
+        ordered_pools.append(atlaspool)
+    ordered_pools.extend(sorted(other_legit_pools))
     
     # Assign pool numbers
     pool_numbers = {name: i+1 for i, name in enumerate(ordered_pools)}
