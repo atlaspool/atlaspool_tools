@@ -16,6 +16,24 @@ from typing import Dict, List, Tuple
 from datetime import datetime
 
 
+def prevhash_to_block_hash(prevhash: str) -> str:
+    """
+    Convert stratum prevhash (little-endian) to block hash (big-endian)
+    for use in blockchain explorers
+    """
+    # Step 1: Convert to bytes and reverse
+    prevhash_bytes = bytes.fromhex(prevhash)
+    reversed_bytes = prevhash_bytes[::-1]
+    
+    # Step 2: Swap bytes within each 4-byte (32-bit) group
+    result = bytearray()
+    for i in range(0, len(reversed_bytes), 4):
+        group = reversed_bytes[i:i+4]
+        result.extend(group[::-1])
+    
+    return result.hex()
+
+
 def load_pools(filename: str = 'pools.txt') -> List[Tuple[str, int, str]]:
     """
     Load pools from file
@@ -324,9 +342,14 @@ def display_timeline_table(timeline: List[Dict], pools: List[Tuple[str, int, str
             if full_prevhash:
                 break
         
-        print(f"  [{letter}] {full_prevhash}")
+        # Convert to big-endian for blockchain explorer
+        block_hash = prevhash_to_block_hash(full_prevhash)
+        
+        print(f"  [{letter}] Prevhash (little-endian): {full_prevhash}")
+        print(f"      Block hash (big-endian):  {block_hash}")
+        print(f"      Verify on blockchain:      https://mempool.space/block/{block_hash}")
+        print()
     
-    print()
     print("  [-] No response / Error")
     print()
 
