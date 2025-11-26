@@ -99,7 +99,7 @@ Time      1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16
 - [3] btc.zsolo.bid:6057
 
 **✓ LEGITIMATE POOLS (Columns 4-16):**
-- [4] ausolo.ckpool.org:3333
+- [4] solo.atlaspool.io:3333
 - [5] eu.findmyblock.xyz:3335
 - [6] eusolo.ckpool.org:3333
 - [7] parasite.wtf:42069
@@ -107,7 +107,7 @@ Time      1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16
 - [9] public-pool.io:21496
 - [10] solo-ca.solohash.co.uk:3333
 - [11] solo-de.solohash.co.uk:3333
-- [12] solo.atlaspool.io:3333
+- [12] ausolo.ckpool.org:3333
 - [13] solo.cat:3333
 - [14] solo.ckpool.org:3333
 - [15] solo.solohash.co.uk:3333
