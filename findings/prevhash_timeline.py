@@ -292,9 +292,14 @@ def display_timeline_table(timeline: List[Dict], pools: List[Tuple[str, int, str
             print(f"  [{pool_num:2d}] {pool_name}")
         print()
     
-    # Legitimate pools
+    # Legitimate pools (atlaspool first, then others sorted)
     print("✓ LEGITIMATE POOLS:")
-    for pool_name in sorted(legit_pools):
+    legit_pool_list = []
+    if atlaspool:
+        legit_pool_list.append(atlaspool)
+    legit_pool_list.extend(sorted(other_legit_pools))
+    
+    for pool_name in legit_pool_list:
         pool_num = pool_numbers[pool_name]
         print(f"  [{pool_num:2d}] {pool_name}")
     
