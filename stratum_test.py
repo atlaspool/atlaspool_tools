@@ -70,14 +70,11 @@ PREDEFINED_SERVERS = [
     ("solo.stratum.braiins.com", 3333, "Braiins Solo", "DE"),  # Germany
     ("de.kano.is", 3333, "KanoPool DE", "DE"),  # Germany
  
-    ("btc-eu.luckymonster.pro", 7112, "EU LuckyMonster", "FR"), # France
-    ("btc.zsolo.bid", 6057, "zSolo", "FR"),              # France
     ("solo.ckpool.org", 3333, "US CKPool", "US"),          # United States
     ("parasite.wtf", 42069, "Parasite Pool", "US"),          # United States
     ("public-pool.io", 21496, "Public Pool", "US"),           # United States
     ("solo.cat", 3333, "solo.cat", "US"),                        # United States
     ("solo-ca.solohash.co.uk", 3333, "US SoloHash", "US"),                        # United States
-    ("btc.luckymonster.pro", 7112, "LuckyMiner", "US"), # United States
 ]
 
 # Global flag to track if ping is available
