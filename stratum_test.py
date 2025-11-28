@@ -62,7 +62,13 @@ PREDEFINED_SERVERS = [
     ("solo.solohash.co.uk", 3333, "UK SoloHash", "UK"),    # UK
     ("pool.solomining.de", 3333, "SoloMining.de", "DE"),    # Germany
     
- 
+    ("blitzpool.yourdevice.ch", 3333, "Blitzpool", "CH"),  # Switzerland
+    ("pool.sunnydecree.de", 3333, "Sunnydecree Pool", "DE"),  # Germany
+    ("pool.nerdminer.de", 3333, "Nerdminer.de", "DE"),  # Germany
+    ("pool.noderunners.network", 1337, "Noderunners", "NL"),  # Netherlands
+    ("pool.satoshiradio.nl", 3333, "Satoshi Radio", "NL"),  # Netherlands
+    ("solo.stratum.braiins.com", 3333, "Braiins Solo", "DE"),  # Germany
+    ("de.kano.is", 3333, "KanoPool DE", "DE"),  # Germany
  
     ("btc-eu.luckymonster.pro", 7112, "EU LuckyMonster", "FR"), # France
     ("btc.zsolo.bid", 6057, "zSolo", "FR"),              # France
