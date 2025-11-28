@@ -27,7 +27,6 @@ Supported Address Types:
 Supported Pool Formats:
   • Standard (CKPool, AtlasPool, most pools)
   • SoloHash (sequence marker early in coinb2)
-  • zsolo.bid (non-standard value split)
   • Custom formats with automatic detection
 
 Usage:
@@ -403,7 +402,6 @@ def parse_coinbase_outputs(coinb2_hex: str, coinb1_hex: str = None) -> list:
     
     Coinb2 structure varies by pool:
     - Standard: [extranonce][sequence 4][output_count 1][outputs...][locktime 4]
-    - zsolo.bid: [value_suffix 5][script_len 1][script][locktime 4] (value split across coinb1/coinb2)
     - SoloHash: sequence in coinb1, coinb2 = [extranonce][output_count][outputs...][locktime]
     
     Each output: [8 bytes value][1-9 bytes script_len][script]
@@ -496,76 +494,7 @@ def parse_coinbase_outputs(coinb2_hex: str, coinb1_hex: str = None) -> list:
         except:
             pass  # Fall through to other methods
         
-        # Method 1: Check for zsolo.bid format
-        # zsolo uses: coinb2 = [output_count 1][extranonce 6][value 8][script_len 1][script][locktime 4]
-        if coinb1_hex and len(coinb2_bytes) >= 16:
-            try:
-                # Check if coinb2[0] looks like output_count (1-10)
-                potential_output_count = coinb2_bytes[0]
-                
-                if 1 <= potential_output_count <= 10:
-                    # Try zsolo format: [output_count 1][extranonce 6][value 8][outputs...]
-                    output_count = potential_output_count
-                    
-                    # Value is at position 7 (after output_count + 6-byte extranonce)
-                    value = int.from_bytes(coinb2_bytes[7:15], 'little')
-                    
-                    # Sanity check: value should be reasonable (0.01 to 100 BTC)
-                    if 1000000 <= value <= 10000000000:
-                        script_len = coinb2_bytes[15]
-                        
-                        # Sanity check script length
-                        if 20 <= script_len <= 50 and len(coinb2_bytes) >= 16 + script_len + 4:
-                            script = coinb2_bytes[16:16+script_len]
-                            
-                            # Verify it's a valid script type
-                            addr_type, addr_data = decode_script(script)
-                            
-                            if addr_type != 'unknown':
-                                # This is zsolo format!
-                                outputs.append({
-                                    'value_satoshis': value,
-                                    'value_btc': value / 100000000,
-                                    'script_hex': script.hex(),
-                                    'address_type': addr_type,
-                                    'address_data': addr_data
-                                })
-                                
-                                # Parse additional outputs if any
-                                pos = 16 + script_len
-                                for _ in range(output_count - 1):
-                                    if pos + 8 > len(coinb2_bytes):
-                                        break
-                                    
-                                    value = int.from_bytes(coinb2_bytes[pos:pos+8], 'little')
-                                    pos += 8
-                                    
-                                    if pos >= len(coinb2_bytes):
-                                        break
-                                    script_len = coinb2_bytes[pos]
-                                    pos += 1
-                                    
-                                    if pos + script_len > len(coinb2_bytes):
-                                        break
-                                    
-                                    script = coinb2_bytes[pos:pos+script_len]
-                                    pos += script_len
-                                    
-                                    addr_type, addr_data = decode_script(script)
-                                    
-                                    outputs.append({
-                                        'value_satoshis': value,
-                                        'value_btc': value / 100000000,
-                                        'script_hex': script.hex(),
-                                        'address_type': addr_type,
-                                        'address_data': addr_data
-                                    })
-                                
-                                return outputs
-            except:
-                pass  # Fall back to other methods
-        
-        # Method 2: Standard format with sequence marker search
+        # Method 1: Standard format with sequence marker search
         # Try to find where outputs start by looking for sequence and testing positions
         if coinb1_hex:
             try:
@@ -1502,6 +1431,29 @@ Note: This tool performs a basic verification. For complete security, you should
     parser.add_argument('--retries', type=int, default=2, help='Number of retries for slow pools (default: 2)')
     
     args = parser.parse_args()
+    
+    # Check for known scam pools
+    scam_pools = ['zsolo.bid', 'luckymonster.pro']
+    if any(scam in args.host.lower() for scam in scam_pools):
+        print("="*70)
+        print("⚠️  WARNING: KNOWN SCAM POOL DETECTED")
+        print("="*70)
+        print()
+        print(f"The pool '{args.host}' is a confirmed scam operation.")
+        print()
+        print("EVIDENCE:")
+        print("  • Mining Bitcoin Cash (BCH) while claiming to mine Bitcoin (BTC)")
+        print("  • Stealing 100% of miners' hashrate for their own BCH rewards")
+        print("  • Never updates to new Bitcoin blocks")
+        print("  • Prevhash found on BCH blockchain, not BTC blockchain")
+        print()
+        print("DO NOT MINE ON THIS POOL!")
+        print()
+        print("For complete analysis and proof, see:")
+        print("  https://github.com/mweinberg/stratum-speed-test/tree/main/findings")
+        print()
+        print("="*70)
+        sys.exit(1)
     
     # Validate arguments
     if args.all_types and args.address:
