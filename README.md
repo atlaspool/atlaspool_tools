@@ -23,8 +23,6 @@ All servers are tested concurrently for fast results (~5-10 seconds total).
 
 **Note**: Use `python3` if `python` is not available on your system.
 
-**macOS Users**: If using the system Python 3.9.6 (from Command Line Tools), the script includes workarounds for subprocess issues. For best results, consider upgrading to Python 3.11+ via Homebrew: `brew install python@3.11`
-
 ## Installation
 
 Clone the repository from GitHub:
@@ -69,6 +67,7 @@ This tests both regular and TLS connections, showing response times for each. TL
 **TLS-enabled pools:**
 - AtlasPool.io (port 4333)
 - Public Pool (port 4333)
+- SoloMining.de (port 4333)
 - Noderunners (port 1336)
 
 **New in v1.4:** Skip certificate verification for testing IP addresses:
@@ -189,7 +188,7 @@ The script includes 20 popular Bitcoin solo mining pools.  This list is not exha
 ### Germany (DE)
 - **EU CKPool** - `eusolo.ckpool.org:3333`
 - **DE SoloHash** - `solo-de.solohash.co.uk:3333`
-- **SoloMining.de** - `pool.solomining.de:3333`
+- **SoloMining.de** - `pool.solomining.de:3333` (TLS: 4333)
 - **Sunnydecree Pool** - `pool.sunnydecree.de:3333`
 - **Nerdminer.de** - `pool.nerdminer.de:3333`
 - **Noderunners** - `pool.noderunners.network:1337` (TLS: 1336)
@@ -229,30 +228,34 @@ Testing from: Baltimore, United States
 Your IP: 203.0.113.42
 Network: AS12345 Example ISP
 
-Testing 16 servers (runs: 1)...
-  Progress: 16/16
+Testing 20 servers (runs: 1)...
+  Progress: 20/20
 
 Results:
-+-----------------+--------+-------------------------+-------+-----------+--------------+
-| Pool Name       | CC     | Host                    | Port  | Ping (ms) | Stratum (ms) |
-+-----------------+--------+-------------------------+-------+-----------+--------------+
-| AtlasPool.io    | *MANY* | solo.atlaspool.io       | 3333  | 12        | 32           |
-| US SoloHash     | US     | solo-ca.solohash.co.uk  | 3333  | 22        | 55           |
-| LuckyMiner      | US     | btc.luckymonster.pro    | 7112  | 31        | 64           |
-| Public Pool     | US     | public-pool.io          | 21496 | BLOCKED   | 119          |
-| Parasite Pool   | US     | parasite.wtf            | 42069 | 52        | 121          |
-| KanoPool        | US     | stratum.kano.is         | 3333  | 76        | 142          |
-| US CKPool       | US     | solo.ckpool.org         | 3333  | 75        | 148          |
-| solo.cat        | US     | solo.cat                | 3333  | 71        | 149          |
-| zSolo           | FR     | btc.zsolo.bid           | 6057  | 100       | 203          |
-| UK SoloHash     | UK     | solo.solohash.co.uk     | 3333  | 93        | 204          |
-| SoloMining.de   | DE     | pool.solomining.de      | 3333  | 105       | 205          |
-| EU LuckyMonster | FR     | btc-eu.luckymonster.pro | 7112  | 98        | 205          |
-| EU CKPool       | DE     | eusolo.ckpool.org       | 3333  | 111       | 211          |
-| DE SoloHash     | DE     | solo-de.solohash.co.uk  | 3333  | 108       | 211          |
-| AU CKPool       | AU     | ausolo.ckpool.org       | 3333  | 304       | 3814         |
-| FindMyBlock     | FR     | eu.findmyblock.xyz      | 3335  | 103       | N/A          |
-+-----------------+--------+-------------------------+-------+-----------+--------------+
++-------------------+--------+-----------------------------+-------+-----------+--------------+
+| Pool Name         | CC     | Host                        | Port  | Ping (ms) | Stratum (ms) |
++-------------------+--------+-----------------------------+-------+-----------+--------------+
+| AtlasPool.io      | *MANY* | solo.atlaspool.io           | 3333  | 12        | 32           |
+| US SoloHash       | US     | solo-ca.solohash.co.uk      | 3333  | 22        | 55           |
+| Public Pool       | US     | public-pool.io              | 3333  | 43        | 89           |
+| Parasite Pool     | US     | parasite.wtf                | 42069 | 52        | 121          |
+| KanoPool          | US     | stratum.kano.is             | 3333  | 76        | 142          |
+| US CKPool         | US     | solo.ckpool.org             | 3333  | 75        | 148          |
+| solo.cat          | US     | solo.cat                    | 3333  | 71        | 149          |
+| UK SoloHash       | UK     | solo.solohash.co.uk         | 3333  | 93        | 204          |
+| SoloMining.de     | DE     | pool.solomining.de          | 3333  | 105       | 205          |
+| EU CKPool         | DE     | eusolo.ckpool.org           | 3333  | 111       | 211          |
+| DE SoloHash       | DE     | solo-de.solohash.co.uk      | 3333  | 108       | 211          |
+| Braiins Solo      | DE     | solo.stratum.braiins.com    | 3333  | 112       | 215          |
+| KanoPool DE       | DE     | de.kano.is                  | 3333  | 114       | 218          |
+| Sunnydecree Pool  | DE     | pool.sunnydecree.de         | 3333  | 109       | 221          |
+| Nerdminer.de      | DE     | pool.nerdminer.de           | 3333  | 113       | 224          |
+| Noderunners       | DE     | pool.noderunners.network    | 1337  | 115       | 228          |
+| Blitzpool         | CH     | blitzpool.yourdevice.ch     | 3333  | 118       | 232          |
+| Satoshi Radio     | NL     | pool.satoshiradio.nl        | 3333  | 121       | 235          |
+| FindMyBlock       | FR     | eu.findmyblock.xyz          | 3335  | 103       | 241          |
+| AU CKPool         | AU     | ausolo.ckpool.org           | 3333  | 304       | 3814         |
++-------------------+--------+-----------------------------+-------+-----------+--------------+
 
 Summary:
 ------------------------------------------------------------
@@ -265,49 +268,23 @@ RECOMMENDATION: Consider using AtlasPool.io (solo.atlaspool.io:3333)
 
 ## Understanding the Results
 
-### Status Messages
+**Stratum (ms)** is the most important metric - this is what your mining hardware actually experiences. Lower is better.
 
-- **Number (e.g., 52)** - Response time in milliseconds
-- **BLOCKED** - Ping failed but stratum succeeded (ICMP blocked by firewall).
-- **N/A** - Connection failed or timed out (server unreachable or down)
+**Status codes:** Number = response time in ms, BLOCKED = ICMP blocked (pool still usable), N/A = connection failed
 
-### Which Metric Matters?
-
-**Stratum (ms)** is the most important metric - this is the actual time your mining hardware experiences when connecting to the pool. Lower is better.
-
-**Ping (ms)** shows basic network latency. If ping shows "BLOCKED" but stratum works, the pool is still usable (some pools block ICMP for security).
-
-### Recommendations
-
-The script recommends all pools within **3ms** of the fastest stratum time. If multiple pools are recommended, they all offer similar performance from your location.
+The script recommends pools within 3ms of the fastest stratum time.
 
 ## Tips for Best Results
 
-1. **Run from your mining network** - Test from the same network connection your miners use
-2. **Run multiple times** - Use `--runs 3` for more accurate results
-3. **Test at different times** - Network conditions vary throughout the day
-4. **Consider geographic location** - Pools closer to you typically have lower latency
-5. **VPN affects results** - Location detection is based on IP geolocation
+- Test from the same network your miners use
+- Use `--runs 3` for more accurate results
+- VPN/proxy will affect location detection and results
 
 ## Adding Custom Pools
 
-To test pools not in the preconfigured list, use the single server test:
+Test unlisted pools: `python stratum_test.py your.pool.com 3333`
 
-```bash
-python stratum_test.py your.pool.com 3333
-```
-
-To permanently add a pool, edit the `PREDEFINED_SERVERS` list in the script:
-
-```python
-PREDEFINED_SERVERS = [
-    ("your.pool.com", 3333, 4333, "Your Pool Name", "US"),
-    # ... other servers
-]
-```
-
-Format: `(hostname, port, tls_port, display_name, country_code)`
-- Set `tls_port` to `0` if the pool doesn't support TLS
+To permanently add, edit `PREDEFINED_SERVERS` in the script: `(hostname, port, tls_port, display_name, country_code)`
 
 ## Troubleshooting
 
@@ -326,9 +303,10 @@ Format: `(hostname, port, tls_port, display_name, country_code)`
 - Try testing a specific server to isolate the issue
 - Check your internet connection
 
-### All pings show "BLOCKED" (macOS)
-- If using system Python 3.9.6, upgrade to Python 3.11+: `brew install python@3.11`
-- Or the script should now work with the v1.1 fix
+### All pings show "BLOCKED"
+- Verify ping command is available: `which ping`
+- Check if ping requires elevated privileges on your system
+- The script should work on all platforms with v1.5 improvements
 
 ### Permission errors on Linux/macOS
 - Make the script executable: `chmod +x stratum_test.py`
@@ -401,6 +379,27 @@ For issues or questions:
 - Pool operators: Contact to be added to the preconfigured list
 
 ## Changelog
+
+### Version 1.5 - December 2025
+
+**Bug Fixes:**
+- Fixed: Concurrent ping race conditions on Linux causing random ping failures
+- Fixed: Replaced temp file approach with proper subprocess handling using pipes
+- Improved: Per-hostname locking prevents race conditions while maintaining full concurrency
+- Improved: Added retry logic (3 attempts) for transient ping failures
+
+**Pool Updates:**
+- Added: TLS support for SoloMining.de (port 4333)
+
+**Technical Details:**
+- Changed: Removed temp file workaround that caused race conditions on Linux
+- Added: Per-hostname lock dictionary to serialize pings to the same host
+- Added: Threading support for lock management
+- Maintained: Cross-platform compatibility (macOS, Linux, Windows)
+- Maintained: Full concurrent testing performance (~10 seconds for all pools)
+
+**Thanks:**
+- Special thanks to @mutatrum for identifying the concurrent ping race condition issue on Linux and contributing to the solution!
 
 ### Version 1.4 - December 2025
 
