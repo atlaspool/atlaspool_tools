@@ -7,7 +7,7 @@ to help you find the fastest pool from your location. Measures both network
 latency (ping) and actual stratum protocol handshake times.
 
 Features:
-  • Tests 20 popular solo mining pools worldwide
+  • Tests 21 popular solo and hybrid-solo mining pools worldwide
   • Concurrent testing for fast results (~10 seconds)
   • Multiple runs for accuracy (--runs 1-3)
   • TLS connection testing (-t/--tls flag) for secure stratum connections
@@ -80,6 +80,7 @@ from statistics import mean, median
 #                 RU=Russia, UK=United Kingdom, US=United States, *MANY*=Anycast (multiple locations)
 PREDEFINED_SERVERS = [
     ("solo.atlaspool.io", 3333, 4333, "AtlasPool.io", "*MANY*"),  # Anycast - Global edge network
+    ("stratum.btcpowlab-pool.com", 3333, 0, "BTC PoW Lab (Hybrid Solo)", "*MANY*"),  # Anycast public ingress
     ("ausolo.ckpool.org", 3333, 0, "AU CKPool", "AU"),      # Australia
     ("stratum.kano.is", 3333, 0, "KanoPool", "US"),          # United States
     ("eusolo.ckpool.org", 3333, 0, "EU CKPool", "DE"),      # Germany
