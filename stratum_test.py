@@ -83,6 +83,7 @@ PREDEFINED_SERVERS = [
     ("ausolo.ckpool.org", 3333, 0, "AU CKPool", "AU"),      # Australia
     ("stratum.kano.is", 3333, 0, "KanoPool", "US"),          # United States
     ("eusolo.ckpool.org", 3333, 0, "EU CKPool", "DE"),      # Germany
+    ("stratum.btcpowlab-pool.com", 3333, 0, "BTC PoW Lab", "DE"),  # Germany
     ("eu.findmyblock.xyz", 3335, 0, "FindMyBlock", "FR"),    # France
     ("solo-de.solohash.co.uk", 3333, 0, "DE SoloHash", "DE"),    # Germany
     ("solo.solohash.co.uk", 3333, 0, "UK SoloHash", "UK"),    # UK
