@@ -174,7 +174,7 @@ python stratum_test.py --runs 3 --json > results.json
 
 ## Preconfigured Mining Pools
 
-The script includes 20 popular Bitcoin solo mining pools.  This list is not exhaustive, and the author intends no slight to any missing pools!  Feel free to submit a pull request or comment on other solo mining pools which should be considered for inclusion.
+The script includes 21 popular Bitcoin solo mining pools.  This list is not exhaustive, and the author intends no slight to any missing pools!  Feel free to submit a pull request or comment on other solo mining pools which should be considered for inclusion.
 
 ### Global/Anycast
 - **AtlasPool.io** - `solo.atlaspool.io:3333` (TLS: 4333) - Global edge network
@@ -194,6 +194,7 @@ The script includes 20 popular Bitcoin solo mining pools.  This list is not exha
 - **Noderunners** - `pool.noderunners.network:1337` (TLS: 1336)
 - **Braiins Solo** - `solo.stratum.braiins.com:3333`
 - **KanoPool DE** - `de.kano.is:3333`
+- **BTC PoW Lab Hybrid Solo** - `stratum.btcpowlab-pool.com:3333`
 
 ### France (FR)
 - **FindMyBlock** - `eu.findmyblock.xyz:3335`
