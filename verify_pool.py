@@ -457,6 +457,95 @@ def parse_coinbase_script_suffix(coinb2_hex: str) -> dict:
         return {'error': str(e)}
 
 
+def extract_coinbase_signature(coinb1_hex: str, coinb2_hex: str,
+                               extranonce1_hex: str = "",
+                               extranonce2_size: int = 0) -> dict:
+    """
+    Extract the block height and pool signature from the coinbase input script,
+    reliably, regardless of where the pool splits coinb1 / coinb2.
+
+    Some pools place the entire input script in coinb1; others split the script
+    (or even the outputs) across the coinb1/coinb2 boundary. Heuristics that scan
+    only coinb2 for a sequence marker, or only coinb1 after the height, break on
+    those layouts. This function reconstructs the full serialized coinbase
+    transaction the same way parse_coinbase_outputs does:
+
+        coinbase = coinb1 + extranonce1 + extranonce2 + coinb2
+
+    then walks it deterministically to the single coinbase input's scriptSig and
+    reads everything after the BIP34 block height as the arbitrary pool
+    signature. The extranonce2 region is zero-filled (it does not affect the
+    script's position relative to the start of the transaction).
+
+    Returns dict with:
+        - block_height: int or None
+        - signature_hex: hex of the arbitrary data after the height
+        - signature_ascii: ASCII rendering (non-printable bytes as '.')
+        - readable_strings: list of printable runs (>= 3 chars)
+    or {'error': ...} on failure.
+    """
+    try:
+        coinb1_bytes = binascii.unhexlify(coinb1_hex) if coinb1_hex else b""
+        coinb2_bytes = binascii.unhexlify(coinb2_hex) if coinb2_hex else b""
+        extranonce1_bytes = binascii.unhexlify(extranonce1_hex) if extranonce1_hex else b""
+        extranonce2_bytes = bytes(extranonce2_size or 0)
+
+        tx = coinb1_bytes + extranonce1_bytes + extranonce2_bytes + coinb2_bytes
+
+        pos = 0
+        pos += 4  # version
+        input_count, pos = read_varint(tx, pos)
+        if input_count < 1:
+            return {'error': 'No coinbase input'}
+
+        # First (and only) coinbase input: prev_hash(32) + prev_index(4) +
+        # script_len(varint) + script(script_len) + sequence(4).
+        pos += 32  # previous output hash (all zeros)
+        pos += 4   # previous output index (0xffffffff)
+        script_len, pos = read_varint(tx, pos)
+        if pos + script_len > len(tx):
+            return {'error': 'Coinbase scriptSig runs past end of reconstructed tx'}
+        script = tx[pos:pos + script_len]
+
+        if len(script) == 0:
+            return {'block_height': None, 'signature_hex': '',
+                    'signature_ascii': '', 'readable_strings': []}
+
+        # BIP34 block height: first byte is the push length of the height value.
+        height_len = script[0]
+        block_height = None
+        if 0 < height_len <= 8 and len(script) > height_len:
+            block_height = int.from_bytes(script[1:1 + height_len], 'little')
+            arbitrary = script[1 + height_len:]
+        else:
+            arbitrary = script
+
+        ascii_text = ''.join(chr(b) if 32 <= b < 127 else '.' for b in arbitrary)
+
+        # Extract readable runs of 3+ printable characters.
+        readable = []
+        cur = ''
+        for b in arbitrary:
+            if 32 <= b < 127:
+                cur += chr(b)
+            else:
+                if len(cur) >= 3:
+                    readable.append(cur)
+                cur = ''
+        if len(cur) >= 3:
+            readable.append(cur)
+
+        return {
+            'block_height': block_height,
+            'signature_hex': arbitrary.hex(),
+            'signature_ascii': ascii_text,
+            'readable_strings': readable,
+        }
+
+    except Exception as e:
+        return {'error': str(e)}
+
+
 def read_varint(data: bytes, pos: int) -> Tuple[int, int]:
     """
     Read a Bitcoin CompactSize (varint) from data at pos.
@@ -1194,6 +1283,7 @@ def validate_extranonce1(subscribe_response: dict) -> Dict:
     """
     result = {
         'exists': False,
+        'empty': False,
         'value': None,
         'size_bytes': None,
         'size_bits': None,
@@ -1215,7 +1305,19 @@ def validate_extranonce1(subscribe_response: dict) -> Dict:
     extranonce1 = subscribe_response['result'][1]
     
     if extranonce1 is None or extranonce1 == '':
-        result['warnings'].append("Extranonce1 is empty or null")
+        # Some pools (e.g. PowerPool, and other proxy/OCEAN-style setups) send
+        # an empty extranonce1 and allocate work space differently. This is not
+        # fatal: the mining.subscribe exchange itself succeeded and the
+        # coinbase can still be reconstructed with a zero-length extranonce1.
+        # Flag it as a warning and let the caller decide whether to continue.
+        result['empty'] = True
+        result['value'] = ''
+        result['size_bytes'] = 0
+        result['size_bits'] = 0
+        result['as_integer'] = 0
+        result['worker_capacity'] = 0
+        result['status'] = 'warning'
+        result['warnings'].append("Extranonce1 is empty - pool allocates work space differently (common with proxy/OCEAN-style pools like PowerPool)")
         return result
     
     # Extranonce1 exists
@@ -1843,7 +1945,11 @@ Note: This tool performs a basic verification. For complete security, you should
                         help='Analyze pool architecture (detect proxying, measure performance)')
     parser.add_argument('--test-extranonce', action='store_true',
                         help='Test extranonce1 uniqueness across multiple connections')
-    parser.add_argument('--username', help='Username (defaults to your address)')
+    parser.add_argument('--username',
+                        help='Stratum username sent in mining.authorize. Defaults to your '
+                             'address. Some pools (e.g. PowerPool) require an account '
+                             'username, optionally with a worker: <username>.<worker> '
+                             '(e.g. --username noname or --username noname.test)')
     parser.add_argument('--password', default='x', help='Password (default: x)')
     parser.add_argument('--bch', action='store_true',
                         help='Verify a Bitcoin Cash (BCH) pool: accept CashAddr '
@@ -2000,31 +2106,39 @@ Note: This tool performs a basic verification. For complete security, you should
     print("\n[1.5/5] Validating extranonce1...")
     extranonce1_info = validate_extranonce1(subscribe_response)
     
-    if not extranonce1_info['exists']:
+    if not extranonce1_info['exists'] and not extranonce1_info.get('empty'):
+        # Truly malformed/missing subscribe response - cannot proceed.
         print("❌ Extranonce1 missing or invalid")
         for warning in extranonce1_info['warnings']:
             print(f"    ⚠️  {warning}")
         sock.close()
         return 1
     
-    print("✓ Extranonce1 received")
-    print(f"    Value (hex):     {extranonce1_info['value']}")
-    print(f"    Value (int):     {extranonce1_info['as_integer']:,}")
-    print(f"    Size:            {extranonce1_info['size_bytes']} bytes ({extranonce1_info['size_bits']} bits)")
-    print(f"    Worker capacity: {extranonce1_info['worker_capacity']:,} unique workers")
-    
-    # Display warnings if any
-    if extranonce1_info['warnings']:
+    if extranonce1_info.get('empty'):
+        # Empty but protocol-valid (e.g. PowerPool). Continue - the coinbase
+        # reconstructs fine with a zero-length extranonce1.
+        print("⚠️  Extranonce1 is empty (continuing)")
         for warning in extranonce1_info['warnings']:
             print(f"    ⚠️  {warning}")
-    
-    # Status indicator
-    if extranonce1_info['status'] == 'good':
-        print(f"    Status:          ✓ Good")
-    elif extranonce1_info['status'] == 'warning':
-        print(f"    Status:          ⚠️  Warning")
     else:
-        print(f"    Status:          ❌ Critical")
+        print("✓ Extranonce1 received")
+        print(f"    Value (hex):     {extranonce1_info['value']}")
+        print(f"    Value (int):     {extranonce1_info['as_integer']:,}")
+        print(f"    Size:            {extranonce1_info['size_bytes']} bytes ({extranonce1_info['size_bits']} bits)")
+        print(f"    Worker capacity: {extranonce1_info['worker_capacity']:,} unique workers")
+        
+        # Display warnings if any
+        if extranonce1_info['warnings']:
+            for warning in extranonce1_info['warnings']:
+                print(f"    ⚠️  {warning}")
+        
+        # Status indicator
+        if extranonce1_info['status'] == 'good':
+            print(f"    Status:          ✓ Good")
+        elif extranonce1_info['status'] == 'warning':
+            print(f"    Status:          ⚠️  Warning")
+        else:
+            print(f"    Status:          ❌ Critical")
     
     # Step 2: Authorize
     print("\n[2/5] Authorizing worker...")
@@ -2101,34 +2215,33 @@ Note: This tool performs a basic verification. For complete security, you should
     print(f"    Coinbase part 1 length: {len(coinb1)} chars")
     print(f"    Coinbase part 2 length: {len(coinb2)} chars")
     
-    # Parse coinbase script for block height and pool signature
+    # Parse coinbase script for block height and pool signature.
     print("\n[4/5] Parsing coinbase script (block height & pool signature)...")
-    
-    # Parse coinb1 (beginning of script)
-    script_info = parse_coinbase_script(coinb1)
-    
-    if 'error' in script_info:
-        print(f"    ⚠️  Could not parse coinbase script prefix: {script_info['error']}")
+
+    # Reconstruct the full coinbase (coinb1 + extranonce1 + extranonce2 + coinb2)
+    # and read the input scriptSig deterministically. This works regardless of
+    # where the pool splits coinb1/coinb2 (some pools split mid-script or even
+    # let the outputs straddle the boundary, which breaks coinb2-only
+    # heuristics).
+    extranonce1, extranonce2_size = extract_extranonce(subscribe_response)
+    sig_info = extract_coinbase_signature(coinb1, coinb2, extranonce1, extranonce2_size)
+
+    if 'error' in sig_info:
+        print(f"    ⚠️  Could not parse coinbase script: {sig_info['error']}")
     else:
-        if script_info['block_height'] is not None:
-            print(f"    Block height: {script_info['block_height']:,}")
-    
-    # Parse coinb2 (end of script - where pool signature usually is)
-    script_suffix = parse_coinbase_script_suffix(coinb2)
-    
-    if 'error' not in script_suffix:
-        if script_suffix['readable_strings']:
-            print(f"    Pool signature: {', '.join(script_suffix['readable_strings'])}")
-        
-        # Show full script suffix if it has readable content
-        if script_suffix['script_suffix_ascii'].strip('.'):
-            ascii_text = script_suffix['script_suffix_ascii']
-            # Only show if there's meaningful content
-            readable_portion = ''.join(c for c in ascii_text if c.isprintable() and c not in '.')
-            if len(readable_portion) >= 3:
-                print(f"    Script suffix (ASCII): {ascii_text[:80]}")
-                if len(ascii_text) > 80:
-                    print(f"                           {ascii_text[80:160]}")
+        if sig_info['block_height'] is not None:
+            print(f"    Block height: {sig_info['block_height']:,}")
+
+        if sig_info['readable_strings']:
+            print(f"    Pool signature: {', '.join(sig_info['readable_strings'])}")
+
+        # Show the full signature ASCII if it carries meaningful content.
+        ascii_text = sig_info['signature_ascii']
+        readable_portion = ''.join(c for c in ascii_text if c.isprintable() and c != '.')
+        if len(readable_portion) >= 3:
+            print(f"    Script signature (ASCII): {ascii_text[:80]}")
+            if len(ascii_text) > 80:
+                print(f"                              {ascii_text[80:160]}")
     
     # Step 5: Parse and verify coinbase outputs
     print("\n[5/5] Parsing coinbase transaction outputs...")
